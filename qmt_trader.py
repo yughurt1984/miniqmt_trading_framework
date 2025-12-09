@@ -14,14 +14,12 @@ from xtquant import xtconstant
 
 # 导入日志模块
 from logger import setup_logger
-from wechat_push import WeChatTradeNotifier  # 添加导入
 
 
 class QMTTraderCallback:
     """QMT交易回调处理"""
-    def __init__(self, logger, wechat_notifier):
+    def __init__(self, logger):
         self.logger = logger
-        self.wechat_notifier = wechat_notifier  # 添加企业微信推送器
         self.order_count = 0  # 订单计数器
         self.trade_count = 0  # 成交计数器
     
@@ -116,33 +114,6 @@ class QMTTraderCallback:
                             f"{stock_code} {trade_action} {trade_volume}股@{trade_price:.2f}, "
                             f"成交时间={trade_time}, 订单ID={order_id}, 成交ID={trade_id}, "
                             f"成交金额={trade_amount:.2f}")
-            
-            
-            # 推送到企业微信（如果设置了）
-            if self.wechat_notifier:
-                self.logger.info("准备推送成交信息到企业微信")
-                try:
-                    result = self.wechat_notifier.notify_trade(
-                        stock_code=stock_code,
-                        direction=trade_action,
-                        volume=trade_volume,
-                        price=trade_price,
-                        trade_amount=trade_amount,
-                        order_id=str(order_id),
-                        trader_id=str(trade_id),  # 使用正确的属性名
-                        trade_time=trade_time,
-                        remark=trade.order_remark if hasattr(trade, 'order_remark') else ""
-                    )
-                    if result:
-                        self.logger.info("企业微信推送成功")
-                    else:
-                        self.logger.error("企业微信推送失败")
-                except Exception as e:
-                    self.logger.error(f"企业微信推送异常: {e}")
-                    import traceback
-                    self.logger.error(f"异常堆栈: {traceback.format_exc()}")
-            else:
-                self.logger.warning("企业微信推送器未初始化，无法发送消息")
                 
         except Exception as e:
             self.logger.error(f"成交回调异常: {e}")
@@ -152,10 +123,7 @@ class QMTTraderCallback:
     def on_order_error(self, order_error):
         """委托报错回调"""
         self.logger.error(f"委托报错: {order_error.error_msg}")
-    
-    def on_order_error(self, order_error):
-        """委托报错回调"""
-        self.logger.error(f"委托报错: {order_error.error_msg}")
+
 
 class QMTTrader:
     """QMT交易核心"""
@@ -163,31 +131,6 @@ class QMTTrader:
     def __init__(self, config: Dict):
         self.config = config
         
-        # 1. 首先初始化日志
-        today = datetime.datetime.now().strftime("%Y%m%d")
-        log_dir = self.config.get('log_dir', 'logs')
-        log_file = os.path.join(log_dir, f'QMTTrader_{today}.log')
-        
-        self.logger = setup_logger(
-            name='QMTTrader', 
-            log_level=self.config.get('log_level', 'INFO'), 
-            log_file=log_file
-        )
-        
-        # 2. 然后初始化企业微信推送器
-        wechat_webhook = self.config.get('wechat_webhook')
-        if wechat_webhook:
-            self.logger.info(f"检测到企业微信Webhook配置，URL长度: {len(wechat_webhook)}")
-            try:
-                self.wechat_notifier = WeChatTradeNotifier(wechat_webhook)
-                self.logger.info("企业微信推送器初始化成功")
-            except Exception as e:
-                self.logger.error(f"企业微信推送器初始化失败: {e}")
-                self.wechat_notifier = None
-        else:
-            self.logger.warning("未配置企业微信Webhook URL，将不会发送推送通知")
-            self.wechat_notifier = None
-    
         # 生成带日期的日志文件名
         today = datetime.datetime.now().strftime("%Y%m%d")
         log_dir = self.config.get('log_dir', 'logs')
@@ -198,7 +141,6 @@ class QMTTrader:
             log_level=self.config.get('log_level', 'INFO'), 
             log_file=log_file
         )
-        
         
         # 初始化变量
         self.trader = None
@@ -232,7 +174,7 @@ class QMTTrader:
             
             # 4. 创建回调对象并注册
             if not hasattr(self, 'callback'):       #确保回调对象只被创建和注册一次
-                self.callback = QMTTraderCallback(self.logger, self.wechat_notifier)
+                self.callback = QMTTraderCallback(self.logger)
                 self.trader.register_callback(self.callback)
                 self.logger.info("QMT回调对象已注册")
             else:
@@ -348,84 +290,6 @@ class QMTTrader:
         except Exception as e:
             self.logger.error(f"下单异常: {e}")
             return False
-
-    def check_order_status(self, order_id: str) -> Dict:
-        """检查订单状态"""
-        try:
-            status_info = self.trader.query_stock_order(self.session_id, self.config['account_id'], order_id)
-            if status_info:
-                return {
-                    'status': status_info.order_status,
-                    'traded_volume': status_info.traded_volume,
-                    'order_volume': status_info.order_volume
-                }
-        except Exception as e:
-            self.logger.error(f"查询订单状态失败: {e}")
-        return {'status': 'unknown', 'traded_volume': 0, 'order_volume': 0}
-    
-    def cancel_order(self, order_id: str) -> bool:
-        """撤销指定订单"""
-        try:
-            result = self.trader.cancel_order_stock(self.session_id, self.config['account_id'], order_id)
-            if result:
-                self.logger.info(f"撤单成功: {order_id}")
-                return True
-            else:
-                self.logger.error(f"撤单失败: {order_id}")
-                return False
-        except Exception as e:
-            self.logger.error(f"撤单异常: {e}")
-            return False
-    
-    def replace_order(self, symbol: str, action: str, price: float = None, quantity: int = None) -> bool:
-        """使用当前价格重新下单（不撤单）"""
-        # 如果没有提供新价格，获取当前市场价格
-        if price is None:
-            try:
-                # 获取当前市场行情
-                market_data = self.get_market_data([symbol])
-                current_price = market_data.get(symbol, {}).get('price', 0)
-                if current_price <= 0:
-                    # 如果获取市场价失败，使用默认价格
-                    self.logger.warning(f"获取{symbol}市场价失败，请手动指定价格")
-                    return False
-                else:
-                    # 使用市场价
-                    price = current_price
-            except Exception as e:
-                self.logger.error(f"获取市场价失败: {e}")
-                return False
-        
-        # 重新下单
-        if action == 'buy':
-            order_type = xtconstant.STOCK_BUY
-        else:
-            order_type = xtconstant.STOCK_SELL
-        
-        order_id = self.trader.order_stock(
-            self.session_id, self.config['account_id'],
-            symbol, order_type, price, quantity
-        )
-        
-        if order_id != -1:
-            self.logger.info(f"重新下单成功: {action} {symbol} {quantity}股 @ {price}")
-            return True
-        else:
-            self.logger.error(f"重新下单失败: {action} {symbol}")
-            return False
-    
-    def cancel_and_replace_order(self, order_id: str, symbol: str, action: str, 
-                                price: float = None, quantity: int = None) -> bool:
-        """撤销并重新下单"""
-        # 撤单
-        if not self.cancel_order(order_id):
-            return False
-            
-        # 等待撤单完成
-        time.sleep(1)
-        
-        # 重新下单
-        return self.replace_order(symbol, action, price, quantity)
     
     def disconnect(self):
         """断开连接"""
@@ -436,4 +300,3 @@ class QMTTrader:
                 pass
         self.connected = False
         self.logger.info("QMT连接已断开")
-        

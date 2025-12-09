@@ -9,7 +9,7 @@ import os
 
 # 导入模块
 from qmt_trader import QMTTrader
-from EMA_std_strategy import EMAStdStrategy 
+from strategy import MovingAverageStrategy
 import risk_control
 from logger import setup_logger
 
@@ -33,23 +33,33 @@ def load_config(config_file: str = "config.json") -> Dict:
 # 在 main.py 中
 def main():
     """主函数"""
+     # 先加载配置
+    config = load_config()
+    if not config:
+        print("配置加载失败，使用默认配置")
+        config = {
+            'log_name': 'miniqmt',
+            'log_level': 'INFO',
+            'log_file': 'test.log'
+        }
     
-    logger = setup_logger(name='国金test', log_level='INFO', log_file='test.log')
+    # 从配置中获取日志名称和日志级别
+    log_name = config.get('log_name', 'miniqmt')
+    log_level = config.get('log_level', 'INFO')
+    log_file = config.get('log_file', 'test.log')
+
+    # 初始化日志
+    logger = setup_logger(name=log_name, log_level=log_level, log_file=log_file)
 
     logger.info("启动交易系统")
     
-    # 加载配置
-    config = load_config()
-    if not config:
-        logger.error("配置加载失败，系统退出")
-        return
     
     # 初始化组件
     trader = QMTTrader(config)
     risk_manager = risk_control.RiskControl(config)
     
-    # 初始化策略（不再传递配置中的策略参数）
-    strategy = EMAStdStrategy()  # 使用默认参数，或传递特定的策略配置
+    # 初始化移动平均策略
+    strategy = MovingAverageStrategy(config)  # 传递配置参数
     
     # 主循环
     running = True
@@ -81,7 +91,7 @@ def main():
                 if passed:
                     # 执行交易
                     success = trader.execute_order_async(
-                        order_type=signal['order_type'],
+                        trade_signal=signal['order_type'],
                         trade_quat=signal['quantity'],
                         trade_price=signal['price'],
                         trade_stockcode=signal['symbol']

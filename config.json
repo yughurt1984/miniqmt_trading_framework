@@ -1,11 +1,11 @@
 {
-    "qmt_path": "E:\\量化软件\\东莞证券QMT模拟交易端\\userdata_mini",
+    "qmt_path": "E:\\quant tools\\东莞证券QMT模拟交易端\\userdata_mini",
     "account_id": "2038046455",
     "account_type": "STOCK",
-    "wechat_webhook": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=6f626e66-fe81-4a84-b4ae-6b577bada57e",
     "trading_enabled": true,
+    "log_name": "miniqmt",
     "log_level": "INFO",
-    "log_file": "E:/学习/miniqmt/logs",  
+    "log_file": "log",  
     "interval": 1,
     "watch_list": [
         "603111.SH",

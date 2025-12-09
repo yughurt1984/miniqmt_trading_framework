@@ -30,7 +30,7 @@ class RiskControl:
             (是否通过, 拒绝原因)
         """
         symbol = signal['symbol']
-        action = signal['action']
+        action = signal['order_type']  # 修改字段名以匹配移动平均策略
         price = signal['price']
         quantity = signal['quantity']
         value = price * quantity
