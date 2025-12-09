@@ -1,9 +1,9 @@
 {
-    "qmt_path": "E:\\quant tools\\东莞证券QMT模拟交易端\\userdata_mini",
-    "account_id": "2038046455",
+    "qmt_path": "E:\\quant tools\\东莞证券QMT模拟交易端\\userdata_mini（你的qmt路径）",
+    "account_id": "你的账号",
     "account_type": "STOCK",
     "trading_enabled": true,
-    "log_name": "miniqmt",
+    "log_name": "自定义名字",
     "log_level": "INFO",
     "log_file": "log",  
     "interval": 1,
